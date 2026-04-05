@@ -13,7 +13,8 @@ import {
 } from "firebase/firestore";
 import { ref, listAll, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
-import type { Board, List, Card, Comment } from "@/types";
+import type { Attachment, Board, Card, Comment, Label, List } from "@/types";
+import { uploadCardAttachment, deleteCardAttachment } from "@/services/attachmentService";
 
 interface BoardState {
   boards: Board[];
@@ -43,6 +44,10 @@ interface BoardState {
   subscribeCards: (boardId: string) => () => void;
   createCard: (card: Omit<Card, "id" | "createdAt" | "updatedAt">) => Promise<string>;
   updateCard: (id: string, data: Partial<Card>) => Promise<void>;
+  updateCardLabels: (cardId: string, labels: Label[]) => Promise<void>;
+  updateCardMembers: (cardId: string, memberIds: string[]) => Promise<void>;
+  addCardAttachment: (cardId: string, file: File, uploadedBy: string) => Promise<Attachment>;
+  removeCardAttachment: (cardId: string, attachmentId: string) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
   moveCard: (cardId: string, newListId: string, newOrder: number) => Promise<void>;
 
@@ -79,6 +84,57 @@ async function deleteStorageFolder(path: string) {
   } catch {
     // Storage folder may not exist — ignore
   }
+}
+
+function normalizeAttachment(data: Record<string, unknown>): Attachment {
+  const createdAt =
+    typeof data.createdAt === "number"
+      ? data.createdAt
+      : typeof data.uploadedAt === "number"
+        ? data.uploadedAt
+        : Date.now();
+
+  return {
+    id: typeof data.id === "string" ? data.id : `${createdAt}-${data.name ?? "file"}`,
+    name: typeof data.name === "string" ? data.name : "Attachment",
+    url: typeof data.url === "string" ? data.url : "",
+    type:
+      typeof data.type === "string" && data.type
+        ? data.type
+        : "application/octet-stream",
+    size: typeof data.size === "number" ? data.size : 0,
+    uploadedBy: typeof data.uploadedBy === "string" ? data.uploadedBy : "",
+    createdAt,
+    uploadedAt: createdAt,
+    storagePath:
+      typeof data.storagePath === "string" ? data.storagePath : undefined,
+  };
+}
+
+function normalizeCard(data: Record<string, unknown>, id: string): Card {
+  const assignedMembers = Array.isArray(data.assignedMembers)
+    ? data.assignedMembers.filter((memberId): memberId is string => typeof memberId === "string")
+    : Array.isArray(data.members)
+      ? data.members.filter((memberId): memberId is string => typeof memberId === "string")
+      : [];
+
+  const attachments = Array.isArray(data.attachments)
+    ? data.attachments
+        .filter((attachment): attachment is Record<string, unknown> => typeof attachment === "object" && attachment !== null)
+        .map(normalizeAttachment)
+    : [];
+
+  return {
+    ...(data as Omit<Card, "id" | "attachments" | "assignedMembers" | "members">),
+    id,
+    labels: Array.isArray(data.labels) ? (data.labels as Label[]) : [],
+    checklist: Array.isArray(data.checklist) ? data.checklist : [],
+    attachments,
+    assignedMembers,
+    members: assignedMembers,
+    createdAt: typeof data.createdAt === "number" ? data.createdAt : Date.now(),
+    updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : Date.now(),
+  };
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -234,7 +290,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     );
     return onSnapshot(q, (snap) => {
       const cards = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Card))
+        .map((d) => normalizeCard(d.data(), d.id))
         .sort((a, b) => a.order - b.order);
       set({ cards });
     }, (err) => console.error("subscribeCards error:", err));
@@ -243,6 +299,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   createCard: async (card) => {
     const docRef = await addDoc(collection(db, "cards"), {
       ...card,
+      members: card.assignedMembers ?? card.members ?? [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -250,7 +307,63 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   updateCard: async (id, data) => {
-    await updateDoc(doc(db, "cards", id), { ...data, updatedAt: Date.now() });
+    const nextData: Record<string, unknown> = { ...data, updatedAt: Date.now() };
+
+    if (data.assignedMembers) {
+      nextData.members = data.assignedMembers;
+    }
+
+    if (data.members && !data.assignedMembers) {
+      nextData.assignedMembers = data.members;
+    }
+
+    await updateDoc(doc(db, "cards", id), nextData);
+  },
+
+  updateCardLabels: async (cardId, labels) => {
+    await get().updateCard(cardId, { labels });
+  },
+
+  updateCardMembers: async (cardId, memberIds) => {
+    await get().updateCard(cardId, { assignedMembers: memberIds, members: memberIds });
+  },
+
+  addCardAttachment: async (cardId, file, uploadedBy) => {
+    const card = get().cards.find((item) => item.id === cardId);
+    if (!card) {
+      throw new Error("Card not found.");
+    }
+
+    const attachment = await uploadCardAttachment({
+      cardId,
+      file,
+      currentAttachments: card.attachments || [],
+      uploadedBy,
+    });
+
+    await get().updateCard(cardId, {
+      attachments: [...(card.attachments || []), attachment],
+    });
+
+    return attachment;
+  },
+
+  removeCardAttachment: async (cardId, attachmentId) => {
+    const card = get().cards.find((item) => item.id === cardId);
+    if (!card) {
+      throw new Error("Card not found.");
+    }
+
+    const attachment = (card.attachments || []).find((item) => item.id === attachmentId);
+    if (!attachment) {
+      throw new Error("Attachment not found.");
+    }
+
+    await deleteCardAttachment(attachment);
+
+    await get().updateCard(cardId, {
+      attachments: (card.attachments || []).filter((item) => item.id !== attachmentId),
+    });
   },
 
   deleteCard: async (id) => {

@@ -22,6 +22,7 @@ interface TimelineViewProps {
 
 export default function TimelineView({ cards, lists, onCardClick }: TimelineViewProps) {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
+  const [renderedAt] = useState(() => Date.now());
   const numWeeks = 4;
   const startDate = weekStart;
   const endDate = addDays(addWeeks(weekStart, numWeeks), -1);
@@ -129,7 +130,7 @@ export default function TimelineView({ cards, lists, onCardClick }: TimelineView
           cardsWithDates.map((card, idx) => {
             const position = getCardPosition(card);
             const listTitle = getListTitle(card.listId);
-            const isOverdue = card.dueDate! < Date.now();
+            const isOverdue = card.dueDate! < renderedAt;
 
             return (
               <div key={card.id} className="flex border-b border-border hover:bg-surface/30">

@@ -1,32 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchStore } from "@/store/useSearchStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useUserStore } from "@/store/useUserStore";
 import type { SearchFilters } from "@/types";
 import { Search, X, Filter, Save, Trash2, Bookmark } from "lucide-react";
 import toast from "react-hot-toast";
-
-const LABEL_COLORS = [
-  { color: "#61bd4f", name: "Green" },
-  { color: "#f2d600", name: "Yellow" },
-  { color: "#ff9f1a", name: "Orange" },
-  { color: "#eb5a46", name: "Red" },
-  { color: "#c377e0", name: "Purple" },
-  { color: "#0079bf", name: "Blue" },
-  { color: "#00c2e0", name: "Sky" },
-  { color: "#51e898", name: "Lime" },
-  { color: "#ff78cb", name: "Pink" },
-  { color: "#344563", name: "Dark" },
-];
+import { LABEL_COLOR_OPTIONS } from "@/services/labelService";
 
 interface SearchFilterBarProps {
   boardId: string;
-  members: string[];
+  memberIds: string[];
 }
 
-export default function SearchFilterBar({ boardId, members }: SearchFilterBarProps) {
+export default function SearchFilterBar({ boardId, memberIds }: SearchFilterBarProps) {
   const user = useAuthStore((s) => s.user);
+  const usersById = useUserStore((state) => state.usersById);
+  const ensureUsers = useUserStore((state) => state.ensureUsers);
   const {
     filters,
     presets,
@@ -41,6 +32,19 @@ export default function SearchFilterBar({ boardId, members }: SearchFilterBarPro
   const [expanded, setExpanded] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [showPresets, setShowPresets] = useState(false);
+
+  useEffect(() => {
+    ensureUsers(memberIds);
+  }, [memberIds, ensureUsers]);
+
+  const members = useMemo(
+    () =>
+      memberIds.map((memberId) => ({
+        id: memberId,
+        name: usersById[memberId]?.name || memberId,
+      })),
+    [memberIds, usersById]
+  );
 
   const hasFilters =
     filters.keyword ||
@@ -105,7 +109,7 @@ export default function SearchFilterBar({ boardId, members }: SearchFilterBarPro
           <div>
             <label className="block text-xs font-medium text-white/60 mb-1">Labels</label>
             <div className="flex flex-wrap gap-1">
-              {LABEL_COLORS.map((l) => (
+              {LABEL_COLOR_OPTIONS.map((l) => (
                 <button
                   key={l.color}
                   onClick={() => {
@@ -133,21 +137,22 @@ export default function SearchFilterBar({ boardId, members }: SearchFilterBarPro
             <div className="flex flex-wrap gap-1">
               {members.map((m) => (
                 <button
-                  key={m}
+                  key={m.id}
                   onClick={() => {
                     const current = filters.members || [];
-                    const newMembers = current.includes(m)
-                      ? current.filter((x) => x !== m)
-                      : [...current, m];
+                    const newMembers = current.includes(m.id)
+                      ? current.filter((x) => x !== m.id)
+                      : [...current, m.id];
                     updateFilter({ members: newMembers.length > 0 ? newMembers : undefined });
                   }}
                   className={`px-2 py-1 rounded text-xs ${
-                    filters.members?.includes(m)
+                    filters.members?.includes(m.id)
                       ? "bg-white text-black"
                       : "bg-white/10 text-white/70 hover:bg-white/20"
                   }`}
+                  title={m.name}
                 >
-                  {m.split("@")[0] || m[0]}
+                  {m.name}
                 </button>
               ))}
             </div>

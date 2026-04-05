@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Card as CardType } from "@/types";
+import { useUserStore } from "@/store/useUserStore";
 import {
   Draggable,
 } from "@hello-pangea/dnd";
-import { Calendar, CheckSquare, MessageSquare, Paperclip, Pencil, Clock } from "lucide-react";
+import { CheckSquare, Paperclip, Pencil, Clock } from "lucide-react";
+import AvatarGroup from "@/components/ui/AvatarGroup";
+import LabelTag from "@/components/ui/LabelTag";
 
 interface CardItemProps {
   card: CardType;
@@ -15,11 +18,27 @@ interface CardItemProps {
 
 export default function CardItem({ card, index, onClick }: CardItemProps) {
   const [hovered, setHovered] = useState(false);
+  const usersById = useUserStore((state) => state.usersById);
+  const ensureUsers = useUserStore((state) => state.ensureUsers);
   const checklistTotal = card.checklist?.length || 0;
   const checklistDone = card.checklist?.filter((c) => c.completed).length || 0;
   const attachmentCount = card.attachments?.length || 0;
   const isOverdue = card.dueDate ? new Date(card.dueDate) < new Date() : false;
   const hasBadges = card.dueDate || checklistTotal > 0 || attachmentCount > 0 || (card.assignedMembers && card.assignedMembers.length > 0);
+
+  useEffect(() => {
+    ensureUsers(card.assignedMembers || []);
+  }, [card.assignedMembers, ensureUsers]);
+
+  const assignedUsers = useMemo(
+    () =>
+      (card.assignedMembers || []).map((memberId) => ({
+        id: memberId,
+        name: usersById[memberId]?.name || memberId,
+        photo: usersById[memberId]?.photoURL || null,
+      })),
+    [card.assignedMembers, usersById]
+  );
 
   return (
     <Draggable draggableId={card.id} index={index}>
@@ -50,16 +69,14 @@ export default function CardItem({ card, index, onClick }: CardItemProps) {
 
           {/* Labels */}
           {card.labels && card.labels.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
+            <div className="flex flex-wrap gap-1 mb-2 overflow-hidden max-w-full">
               {card.labels.map((l) => (
-                <span
+                <LabelTag
                   key={l.id}
-                  className="h-2 rounded-full transition-all duration-200 group-hover:h-4 group-hover:px-1.5 group-hover:text-[9px] group-hover:text-white group-hover:font-medium group-hover:leading-4 overflow-hidden"
-                  style={{ background: l.color, width: hovered ? "auto" : "40px", minWidth: hovered ? "40px" : undefined }}
-                  title={l.name}
-                >
-                  {hovered && <span>{l.name}</span>}
-                </span>
+                  color={l.color}
+                  name={l.name}
+                  variant="compact"
+                />
               ))}
             </div>
           )}
@@ -103,22 +120,7 @@ export default function CardItem({ card, index, onClick }: CardItemProps) {
 
               {/* Assigned member avatars */}
               {card.assignedMembers && card.assignedMembers.length > 0 && (
-                <div className="flex -space-x-1.5 ml-auto">
-                  {card.assignedMembers.slice(0, 3).map((m) => (
-                    <div
-                      key={m}
-                      className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold border-2 border-background"
-                      title={m}
-                    >
-                      {m[0]?.toUpperCase()}
-                    </div>
-                  ))}
-                  {card.assignedMembers.length > 3 && (
-                    <div className="w-6 h-6 rounded-full bg-surface text-muted flex items-center justify-center text-[10px] font-bold border-2 border-background">
-                      +{card.assignedMembers.length - 3}
-                    </div>
-                  )}
-                </div>
+                <AvatarGroup users={assignedUsers} max={3} size="sm" className="ml-auto" />
               )}
             </div>
           )}

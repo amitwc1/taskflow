@@ -36,11 +36,15 @@ function firebaseUserToUser(u: FirebaseUser): User {
 
 async function ensureUserDoc(u: FirebaseUser) {
   const ref = doc(db, "users", u.uid);
+  const normalizedEmail = u.email?.toLowerCase() || "";
+  const normalizedName = u.displayName || normalizedEmail || "Unknown";
   const snap = await getDoc(ref);
   if (!snap.exists()) {
     await setDoc(ref, {
+      id: u.uid,
       uid: u.uid,
-      email: u.email,
+      name: normalizedName,
+      email: normalizedEmail,
       displayName: u.displayName,
       photoURL: u.photoURL,
       createdAt: Date.now(),
@@ -49,9 +53,13 @@ async function ensureUserDoc(u: FirebaseUser) {
     // Update fields that may have been null during initial creation (race with onAuthStateChanged)
     const data = snap.data();
     const updates: Record<string, unknown> = {};
+    if (!data.id) updates.id = u.uid;
+    if (!data.name && normalizedName) updates.name = normalizedName;
     if (!data.displayName && u.displayName) updates.displayName = u.displayName;
     if (!data.photoURL && u.photoURL) updates.photoURL = u.photoURL;
-    if (!data.email && u.email) updates.email = u.email;
+    if ((!data.email || data.email !== normalizedEmail) && normalizedEmail) {
+      updates.email = normalizedEmail;
+    }
     if (Object.keys(updates).length > 0) {
       await updateDoc(ref, updates);
     }

@@ -11,6 +11,13 @@ export interface User {
   photoURL: string | null;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  photoURL: string | null;
+}
+
 // ========================
 // Board Member with role info
 // ========================
@@ -103,6 +110,7 @@ export interface Card {
   labels: Label[];
   checklist: ChecklistItem[];
   attachments: Attachment[];
+  members?: string[];
   assignedMembers: string[];
   lastUpdatedBy?: string;
   lastUpdatedByName?: string;
@@ -127,7 +135,11 @@ export interface Attachment {
   name: string;
   url: string;
   type: string;
-  uploadedAt: number;
+  size: number;
+  uploadedBy: string;
+  createdAt: number;
+  uploadedAt?: number;
+  storagePath?: string;
 }
 
 export interface Comment {

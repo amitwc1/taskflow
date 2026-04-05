@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAutomationStore } from "@/store/useAutomationStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useUserStore } from "@/store/useUserStore";
 import type { AutomationRule, AutomationTrigger, AutomationActionType, List } from "@/types";
 import { Zap, Plus, Trash2, X, ToggleLeft, ToggleRight } from "lucide-react";
 import toast from "react-hot-toast";
@@ -10,7 +11,7 @@ import toast from "react-hot-toast";
 interface AutomationPanelProps {
   boardId: string;
   lists: List[];
-  members: string[];
+  memberIds: string[];
   open: boolean;
   onClose: () => void;
 }
@@ -34,18 +35,33 @@ const ACTIONS: { value: AutomationActionType; label: string }[] = [
 export default function AutomationPanel({
   boardId,
   lists,
-  members,
+  memberIds,
   open,
   onClose,
 }: AutomationPanelProps) {
   const user = useAuthStore((s) => s.user);
   const { rules, create, update, remove } = useAutomationStore();
+  const usersById = useUserStore((state) => state.usersById);
+  const ensureUsers = useUserStore((state) => state.ensureUsers);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [trigger, setTrigger] = useState<AutomationTrigger>("card_moved_to_list");
   const [triggerConfig, setTriggerConfig] = useState<Record<string, string>>({});
   const [actionType, setActionType] = useState<AutomationActionType>("move_card");
   const [actionConfig, setActionConfig] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    ensureUsers(memberIds);
+  }, [memberIds, ensureUsers]);
+
+  const members = useMemo(
+    () =>
+      memberIds.map((memberId) => ({
+        id: memberId,
+        name: usersById[memberId]?.name || memberId,
+      })),
+    [memberIds, usersById]
+  );
 
   if (!open) return null;
 
@@ -188,8 +204,8 @@ export default function AutomationPanel({
                 >
                   <option value="">Select member...</option>
                   {members.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m.id} value={m.id}>
+                      {m.name}
                     </option>
                   ))}
                 </select>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useBoardStore } from "@/store/useBoardStore";
@@ -12,6 +12,7 @@ import { useTimeTrackingStore } from "@/store/useTimeTrackingStore";
 import { useSearchStore } from "@/store/useSearchStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { useCollaborationStore } from "@/store/useCollaborationStore";
+import { useUserStore } from "@/store/useUserStore";
 import AuthGuard from "@/components/AuthGuard";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
@@ -41,7 +42,6 @@ const TableView = dynamic(() => import("@/components/views/TableView"));
 
 function BoardContent() {
   const params = useParams();
-  const router = useRouter();
   const boardId = params.id as string;
   const user = useAuthStore((s) => s.user);
   const {
@@ -55,6 +55,7 @@ function BoardContent() {
   const { filterCards, subscribePresets } = useSearchStore();
   const { startTracking, subscribeOnlineUsers, reset: resetPresence } = usePresenceStore();
   const { subscribeMemberList, setCurrentUserRole, reset: resetCollab } = useCollaborationStore();
+  const ensureUsers = useUserStore((state) => state.ensureUsers);
 
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [showAddList, setShowAddList] = useState(false);
@@ -135,103 +136,93 @@ function BoardContent() {
     [filteredCards]
   );
 
-  const onDragEnd = useCallback(
-    async (result: DropResult) => {
-      const { source, destination, type } = result;
-      if (!destination) return;
-      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+  async function onDragEnd(result: DropResult) {
+    const { source, destination, type } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-      if (type === "list") {
-        // Reorder lists
-        const reordered = [...lists];
-        const [moved] = reordered.splice(source.index, 1);
-        reordered.splice(destination.index, 0, moved);
+    if (type === "list") {
+      // Reorder lists
+      const reordered = [...lists];
+      const [moved] = reordered.splice(source.index, 1);
+      reordered.splice(destination.index, 0, moved);
 
-        const batch = writeBatch(db);
-        reordered.forEach((list, i) => {
-          batch.update(doc(db, "lists", list.id), { order: i });
-        });
-        await batch.commit();
-        return;
-      }
-
-      // Card drag
-      const sourceListId = source.droppableId;
-      const destListId = destination.droppableId;
-
-      if (sourceListId === destListId) {
-        // Same list reorder
-        const listCards = getCardsForList(sourceListId);
-        const reordered = [...listCards];
-        const [moved] = reordered.splice(source.index, 1);
-        reordered.splice(destination.index, 0, moved);
-
-        const batch = writeBatch(db);
-        reordered.forEach((card, i) => {
-          batch.update(doc(db, "cards", card.id), { order: i });
-        });
-        await batch.commit();
-      } else {
-        // Move card to different list
-        const sourceCards = [...getCardsForList(sourceListId)];
-        const destCards = [...getCardsForList(destListId)];
-        const [moved] = sourceCards.splice(source.index, 1);
-
-        destCards.splice(destination.index, 0, { ...moved, listId: destListId });
-
-        const batch = writeBatch(db);
-        // Update source list orders
-        sourceCards.forEach((card, i) => {
-          batch.update(doc(db, "cards", card.id), { order: i });
-        });
-        // Update dest list orders + the moved card's listId
-        destCards.forEach((card, i) => {
-          const updateData: Record<string, unknown> = { order: i };
-          if (card.id === moved.id) {
-            updateData.listId = destListId;
-          }
-          batch.update(doc(db, "cards", card.id), updateData);
-        });
-        await batch.commit();
-
-        // Log activity
-        if (user) {
-          const fromList = lists.find((l) => l.id === sourceListId);
-          const toList = lists.find((l) => l.id === destListId);
-          logActivity({
-            boardId,
-            cardId: moved.id,
-            userId: user.uid,
-            userName: user.displayName || "Unknown",
-            userPhoto: user.photoURL,
-            action: "card_moved",
-            details: `moved "${moved.title}" from "${fromList?.title}" to "${toList?.title}"`,
-          });
-        }
-
-        // Execute automations
-        const movedCard = cards.find((c) => c.id === moved.id);
-        if (movedCard) {
-          executeAutomations(boardId, "card_moved_to_list", {
-            card: movedCard,
-            fromListId: sourceListId,
-            toListId: destListId,
-            lists,
-            boardMembers: currentBoard?.members,
-          });
-        }
-      }
-    },
-    [lists, getCardsForList]
-  );
-
-  // Refresh selectedCard from real-time data
-  useEffect(() => {
-    if (selectedCard) {
-      const updated = cards.find((c) => c.id === selectedCard.id);
-      if (updated) setSelectedCard(updated);
+      const batch = writeBatch(db);
+      reordered.forEach((list, i) => {
+        batch.update(doc(db, "lists", list.id), { order: i });
+      });
+      await batch.commit();
+      return;
     }
-  }, [cards, selectedCard]);
+
+    // Card drag
+    const sourceListId = source.droppableId;
+    const destListId = destination.droppableId;
+
+    if (sourceListId === destListId) {
+      // Same list reorder
+      const listCards = getCardsForList(sourceListId);
+      const reordered = [...listCards];
+      const [moved] = reordered.splice(source.index, 1);
+      reordered.splice(destination.index, 0, moved);
+
+      const batch = writeBatch(db);
+      reordered.forEach((card, i) => {
+        batch.update(doc(db, "cards", card.id), { order: i });
+      });
+      await batch.commit();
+      return;
+    }
+
+    // Move card to different list
+    const sourceCards = [...getCardsForList(sourceListId)];
+    const destCards = [...getCardsForList(destListId)];
+    const [moved] = sourceCards.splice(source.index, 1);
+
+    destCards.splice(destination.index, 0, { ...moved, listId: destListId });
+
+    const batch = writeBatch(db);
+    sourceCards.forEach((card, i) => {
+      batch.update(doc(db, "cards", card.id), { order: i });
+    });
+    destCards.forEach((card, i) => {
+      const updateData: Record<string, unknown> = { order: i };
+      if (card.id === moved.id) {
+        updateData.listId = destListId;
+      }
+      batch.update(doc(db, "cards", card.id), updateData);
+    });
+    await batch.commit();
+
+    if (user) {
+      const fromList = lists.find((l) => l.id === sourceListId);
+      const toList = lists.find((l) => l.id === destListId);
+      logActivity({
+        boardId,
+        cardId: moved.id,
+        userId: user.uid,
+        userName: user.displayName || "Unknown",
+        userPhoto: user.photoURL,
+        action: "card_moved",
+        details: `moved "${moved.title}" from "${fromList?.title}" to "${toList?.title}"`,
+      });
+    }
+
+    const movedCard = cards.find((c) => c.id === moved.id);
+    if (movedCard) {
+      executeAutomations(boardId, "card_moved_to_list", {
+        card: movedCard,
+        fromListId: sourceListId,
+        toListId: destListId,
+        lists,
+        boardMembers: currentBoard?.members,
+      });
+    }
+  }
+
+  const activeSelectedCard = selectedCard
+    ? cards.find((card) => card.id === selectedCard.id) || selectedCard
+    : null;
 
   // Set current user role when board loads
   useEffect(() => {
@@ -239,6 +230,11 @@ function BoardContent() {
       setCurrentUserRole(currentBoard, user.uid);
     }
   }, [currentBoard, user, setCurrentUserRole]);
+
+  useEffect(() => {
+    if (!currentBoard?.members?.length) return;
+    ensureUsers(currentBoard.members);
+  }, [currentBoard?.members, ensureUsers]);
 
   if (boardLoading) {
     return (
@@ -284,7 +280,7 @@ function BoardContent() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <SearchFilterBar boardId={boardId} members={currentBoard.members || []} />
+          <SearchFilterBar boardId={boardId} memberIds={currentBoard.members || []} />
           <AIAssistant mode="board" lists={lists} cards={cards} />
           {/* Presence avatars */}
           <PresenceAvatars />
@@ -396,9 +392,9 @@ function BoardContent() {
       )}
 
       {/* Card modal */}
-      {selectedCard && (
+      {activeSelectedCard && (
         <CardModal
-          card={selectedCard}
+          card={activeSelectedCard}
           onClose={() => setSelectedCard(null)}
           boardMembers={currentBoard.members || []}
           boardId={boardId}
@@ -433,7 +429,7 @@ function BoardContent() {
       <AutomationPanel
         boardId={boardId}
         lists={lists}
-        members={currentBoard.members || []}
+        memberIds={currentBoard.members || []}
         open={showAutomation}
         onClose={() => setShowAutomation(false)}
       />

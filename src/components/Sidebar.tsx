@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 import { useBoardStore } from "@/store/useBoardStore";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import {
-  LayoutDashboard, ChevronDown, ChevronRight,
-  Layers, Lock, Globe, Users, ChevronsLeft, ChevronsRight,
-  Settings, LogOut, Sparkles,
+  LayoutDashboard, ChevronDown,
+  Layers, ChevronsLeft, ChevronsRight,
+  LogOut,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -22,7 +22,7 @@ export default function Sidebar() {
   const activeBoardId = params?.id as string | undefined;
 
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedWs, setExpandedWs] = useState<Set<string>>(new Set());
+  const [manualExpandedWs, setManualExpandedWs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
@@ -32,28 +32,24 @@ export default function Sidebar() {
     }
   }, [user, subscribeWorkspaces, subscribeBoardsByUser]);
 
-  useEffect(() => {
+  const expandedWs = useMemo(() => {
+    const next = new Set(manualExpandedWs);
     if (activeBoardId) {
-      const board = boards.find((b) => b.id === activeBoardId);
-      if (board) {
-        setExpandedWs((prev) => new Set(prev).add(board.workspaceId));
+      const activeBoard = boards.find((board) => board.id === activeBoardId);
+      if (activeBoard) {
+        next.add(activeBoard.workspaceId);
       }
     }
-  }, [activeBoardId, boards]);
+    return next;
+  }, [manualExpandedWs, activeBoardId, boards]);
 
   const toggleWs = (wsId: string) => {
-    setExpandedWs((prev) => {
+    setManualExpandedWs((prev) => {
       const next = new Set(prev);
       if (next.has(wsId)) next.delete(wsId);
       else next.add(wsId);
       return next;
     });
-  };
-
-  const visibilityIcon = (v: string) => {
-    if (v === "private") return <Lock size={12} className="shrink-0 opacity-50" />;
-    if (v === "public") return <Globe size={12} className="shrink-0 opacity-50" />;
-    return <Users size={12} className="shrink-0 opacity-50" />;
   };
 
   // Color palette for workspace initials

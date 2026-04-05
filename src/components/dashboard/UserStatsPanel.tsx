@@ -18,17 +18,23 @@ interface BoardStats {
 export default function UserStatsPanel() {
   const user = useAuthStore((s) => s.user);
   const { boards } = useBoardStore();
-  const [stats, setStats] = useState<BoardStats[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<BoardStats[] | null>(null);
 
   useEffect(() => {
-    if (!user || boards.length === 0) {
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
     const fetchStats = async () => {
-      setLoading(true);
+      if (!user || boards.length === 0) {
+        if (!cancelled) {
+          setStats([]);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setStats(null);
+      }
+
       const results: BoardStats[] = [];
 
       // Only fetch stats for boards the user is a member of
@@ -50,16 +56,21 @@ export default function UserStatsPanel() {
         }
       }
 
-      setStats(results);
-      setLoading(false);
+      if (!cancelled) {
+        setStats(results);
+      }
     };
 
-    fetchStats();
+    void fetchStats();
+    return () => {
+      cancelled = true;
+    };
   }, [user, boards]);
 
   if (!user) return null;
+  const loading = stats === null;
   if (loading) return null;
-  if (stats.length === 0) return null;
+  if (!stats || stats.length === 0) return null;
 
   const totalActivity = stats.reduce((sum, s) => sum + s.myActivityCount, 0);
 

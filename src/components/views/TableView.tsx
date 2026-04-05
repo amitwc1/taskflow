@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { Card, List, Label } from "@/types";
+import { useEffect, useMemo, useState } from "react";
+import type { Card, List } from "@/types";
+import { useUserStore } from "@/store/useUserStore";
 import {
   Calendar,
   ChevronDown,
@@ -9,6 +10,8 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { format } from "date-fns";
+import AvatarGroup from "@/components/ui/AvatarGroup";
+import LabelTag from "@/components/ui/LabelTag";
 
 interface TableViewProps {
   cards: Card[];
@@ -22,9 +25,20 @@ type SortDir = "asc" | "desc";
 export default function TableView({ cards, lists, onCardClick }: TableViewProps) {
   const [sortKey, setSortKey] = useState<SortKey>("title");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const usersById = useUserStore((state) => state.usersById);
+  const ensureUsers = useUserStore((state) => state.ensureUsers);
+  const [renderedAt] = useState(() => Date.now());
 
-  const getListTitle = (listId: string) =>
-    lists.find((l) => l.id === listId)?.title || "";
+  const listTitles = useMemo(
+    () => Object.fromEntries(lists.map((list) => [list.id, list.title])),
+    [lists]
+  );
+
+  const getListTitle = (listId: string) => listTitles[listId] || "";
+
+  useEffect(() => {
+    ensureUsers(cards.flatMap((card) => card.assignedMembers || []));
+  }, [cards, ensureUsers]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -35,7 +49,7 @@ export default function TableView({ cards, lists, onCardClick }: TableViewProps)
     }
   };
 
-  const sortedCards = useMemo(() => {
+  const sortedCards = (() => {
     const sorted = [...cards];
     sorted.sort((a, b) => {
       let cmp = 0;
@@ -65,7 +79,7 @@ export default function TableView({ cards, lists, onCardClick }: TableViewProps)
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [cards, sortKey, sortDir]);
+  })();
 
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown size={12} className="text-muted/50" />;
@@ -112,7 +126,7 @@ export default function TableView({ cards, lists, onCardClick }: TableViewProps)
               </tr>
             ) : (
               sortedCards.map((card) => {
-                const isOverdue = card.dueDate ? card.dueDate < Date.now() : false;
+                const isOverdue = card.dueDate ? card.dueDate < renderedAt : false;
                 const checkTotal = card.checklist?.length || 0;
                 const checkDone = card.checklist?.filter((c) => c.completed).length || 0;
                 const progress = checkTotal > 0 ? Math.round((checkDone / checkTotal) * 100) : -1;
@@ -148,11 +162,12 @@ export default function TableView({ cards, lists, onCardClick }: TableViewProps)
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1 flex-wrap">
                         {card.labels?.map((l) => (
-                          <span
+                          <LabelTag
                             key={l.id}
-                            className="w-6 h-3 rounded-full"
-                            style={{ background: l.color }}
-                            title={l.name}
+                            color={l.color}
+                            name={l.name}
+                            variant="compact"
+                            className="w-6 h-3 hover:w-auto hover:px-2"
                           />
                         ))}
                         {(!card.labels || card.labels.length === 0) && (
@@ -161,20 +176,17 @@ export default function TableView({ cards, lists, onCardClick }: TableViewProps)
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
-                      <div className="flex -space-x-1">
-                        {card.assignedMembers?.slice(0, 3).map((m) => (
-                          <div
-                            key={m}
-                            className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold border border-background"
-                            title={m}
-                          >
-                            {m[0]?.toUpperCase()}
-                          </div>
-                        ))}
-                        {(card.assignedMembers?.length || 0) > 3 && (
-                          <span className="text-[10px] text-muted ml-1">
-                            +{card.assignedMembers!.length - 3}
-                          </span>
+                      <div className="flex items-center">
+                        {(card.assignedMembers?.length || 0) > 0 && (
+                          <AvatarGroup
+                            users={(card.assignedMembers || []).map((memberId) => ({
+                              id: memberId,
+                              name: usersById[memberId]?.name || memberId,
+                              photo: usersById[memberId]?.photoURL || null,
+                            }))}
+                            max={3}
+                            size="sm"
+                          />
                         )}
                         {(!card.assignedMembers || card.assignedMembers.length === 0) && (
                           <span className="text-xs text-muted/50">—</span>

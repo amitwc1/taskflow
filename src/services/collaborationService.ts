@@ -127,7 +127,7 @@ export async function inviteMember(params: {
     userName: invitedBy.displayName,
     userPhoto: invitedBy.photoURL,
     action: "member_invited",
-    details: `invited ${userData.displayName || trimmed} as ${role}`,
+    details: `invited ${userData.name || userData.displayName || trimmed} as ${role}`,
     metadata: { invitedUserId: userId, invitedEmail: trimmed, role },
   });
 
@@ -241,7 +241,7 @@ export async function getBoardMembers(board: Board): Promise<BoardMember[]> {
       members.push({
         userId: uid,
         email: data.email || "",
-        displayName: data.displayName || data.email || "Unknown",
+        displayName: data.name || data.displayName || data.email || "Unknown",
         photoURL: data.photoURL || null,
         role: board.memberRoles?.[uid] || (board.ownerId === uid ? "admin" : "member"),
         joinedAt: data.createdAt || 0,
