@@ -12,9 +12,25 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+function initFirebase() {
+  try {
+    const app =
+      getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    return {
+      auth: getAuth(app),
+      db: getFirestore(app),
+      storage: getStorage(app),
+    };
+  } catch {
+    // Firebase init can fail during build when env vars are missing/invalid.
+    // The app will initialise properly at runtime in the browser.
+    return { auth: undefined!, db: undefined!, storage: undefined! };
+  }
+}
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+const firebase = initFirebase();
+
+export const auth = firebase.auth;
+export const db = firebase.db;
+export const storage = firebase.storage;
 export const googleProvider = new GoogleAuthProvider();
