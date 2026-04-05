@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-primary: #0079bf;
+  --color-primary-hover: #026aa7;
+  --color-secondary: #5ba4cf;
+  --color-accent: #eb5a46;
+  --color-surface: #f4f5f7;
+  --color-surface-hover: #ebecf0;
+  --color-border: #dfe1e6;
+  --color-muted: #6b778c;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --color-background: #1a1a2e;
+  --color-foreground: #e2e8f0;
+  --color-primary: #0ea5e9;
+  --color-primary-hover: #0284c7;
+  --color-secondary: #38bdf8;
+  --color-accent: #f43f5e;
+  --color-surface: #16213e;
+  --color-surface-hover: #1e2d4a;
+  --color-border: #2d3748;
+  --color-muted: #94a3b8;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* ─── Animations ─── */
+@keyframes animate-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-in {
+  animation: animate-in 0.15s ease-out both;
+}
+.fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+.slide-up {
+  animation: slide-up 0.2s ease-out both;
+}
+.pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ─── Drag and drop styles ─── */
+[data-rfd-draggable-context-id] {
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.board-bg {
+  background-size: cover;
+  background-position: center;
+}
+
+/* ─── Custom scrollbar in list columns ─── */
+.list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.list-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+.list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
 }

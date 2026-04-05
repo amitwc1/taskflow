@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == userId;
+    }
+
+    // Workspaces collection
+    match /workspaces/{workspaceId} {
+      allow read: if isAuth() && request.auth.uid in resource.data.members;
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.ownerId ||
+        request.auth.uid in resource.data.members
+      );
+      allow delete: if isAuth() && request.auth.uid == resource.data.ownerId;
+    }
+
+    // Boards collection
+    match /boards/{boardId} {
+      allow read: if isAuth() && (
+        resource.data.visibility == 'public' ||
+        request.auth.uid in resource.data.members
+      );
+      allow create: if isAuth();
+      allow update: if isAuth() && request.auth.uid in resource.data.members;
+      allow delete: if isAuth() && request.auth.uid == resource.data.ownerId;
+    }
+
+    // Lists collection
+    match /lists/{listId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // Cards collection
+    match /cards/{cardId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // Comments collection
+    match /comments/{commentId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow delete: if isAuth() && request.auth.uid == resource.data.userId;
+    }
+
+    // Activities collection
+    match /activities/{activityId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuth() && request.auth.uid == resource.data.userId;
+      allow create: if isAuth();
+      allow update, delete: if isAuth() && request.auth.uid == resource.data.userId;
+    }
+
+    // Presence collection
+    match /presence/{presenceId} {
+      allow read: if isAuth();
+      allow create, update: if isAuth();
+      allow delete: if isAuth();
+    }
+
+    // Time logs collection
+    match /timeLogs/{timeLogId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+    }
+
+    // Automations collection
+    match /automations/{automationId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAuth();
+    }
+
+    // Filter presets collection
+    match /filterPresets/{presetId} {
+      allow read: if isAuth() && request.auth.uid == resource.data.userId;
+      allow create: if isAuth();
+      allow delete: if isAuth() && request.auth.uid == resource.data.userId;
+    }
+  }
+}
