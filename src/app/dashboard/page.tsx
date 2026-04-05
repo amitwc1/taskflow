@@ -8,10 +8,14 @@ import AuthGuard from "@/components/AuthGuard";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import UserStatsPanel from "@/components/dashboard/UserStatsPanel";
-import { Plus, Trash2, LayoutGrid, Loader2, Users } from "lucide-react";
+import { Plus, Trash2, LayoutGrid, Loader2, Users, LayoutTemplate } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import type { Workspace, Board } from "@/types";
+import TemplateSelector from "@/components/dashboard/TemplateSelector";
+import { createBoardFromTemplate } from "@/services/templateService";
+import { useTemplateStore } from "@/store/useTemplateStore";
 
 function CreateWorkspaceModal({
   open,
@@ -151,7 +155,17 @@ function WorkspaceSection({ workspace, boards: allBoards }: { workspace: Workspa
   const { createBoard, deleteBoard } = useBoardStore();
   const { deleteWorkspace } = useWorkspaceStore();
   const [showCreateBoard, setShowCreateBoard] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const router = useRouter();
+  const { setSearchQuery, setSelectedCategory } = useTemplateStore();
   const workspaceBoards = allBoards.filter((b) => b.workspaceId === workspace.id);
+
+  // Reset search/filter state when closing template selector
+  const closeTemplateSelector = () => {
+    setShowTemplates(false);
+    setSearchQuery("");
+    setSelectedCategory(null);
+  };
 
   const handleCreateBoard = async (
     title: string,
@@ -203,6 +217,24 @@ function WorkspaceSection({ workspace, boards: allBoards }: { workspace: Workspa
     }
   };
 
+  const handleCreateFromTemplate = async (templateId: string, customTitle?: string) => {
+    if (!user) return;
+    try {
+      const boardId = await createBoardFromTemplate(
+        templateId,
+        user.uid,
+        user.email || "",
+        workspace.id,
+        customTitle,
+      );
+      closeTemplateSelector();
+      toast.success("Board created from template");
+      router.push(`/board/${boardId}`);
+    } catch {
+      toast.error("Failed to create board from template");
+    }
+  };
+
   return (
     <div className="mb-8">
       <div className="flex items-center gap-3 mb-4">
@@ -248,11 +280,23 @@ function WorkspaceSection({ workspace, boards: allBoards }: { workspace: Workspa
           <Plus size={18} />
           Create board
         </button>
+        <button
+          onClick={() => setShowTemplates(true)}
+          className="h-24 rounded-lg bg-surface hover:bg-surface-hover transition-colors flex items-center justify-center gap-2 text-muted border border-dashed border-border"
+        >
+          <LayoutTemplate size={18} />
+          From Template
+        </button>
       </div>
       <CreateBoardModal
         open={showCreateBoard}
         onClose={() => setShowCreateBoard(false)}
         onCreate={handleCreateBoard}
+      />
+      <TemplateSelector
+        open={showTemplates}
+        onClose={closeTemplateSelector}
+        onSelect={handleCreateFromTemplate}
       />
     </div>
   );

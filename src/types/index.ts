@@ -313,3 +313,33 @@ export interface Invitation {
   status: "pending" | "accepted";
   createdAt: number;
 }
+
+// ========================
+// Board Templates
+// ========================
+
+export interface TemplateCard {
+  title: string;
+  description?: string;
+}
+
+export interface TemplateList {
+  title: string;
+  cards: TemplateCard[];
+}
+
+export interface TemplateLabel {
+  name: string;
+  color: string;
+}
+
+export interface BoardTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  background: string;
+  lists: TemplateList[];
+  labels: TemplateLabel[];
+}

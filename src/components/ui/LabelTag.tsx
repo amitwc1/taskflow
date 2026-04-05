@@ -13,12 +13,12 @@ export default function LabelTag({ color, name, variant = "compact", onClick, cl
   if (variant === "compact") {
     return (
       <span
-        className={`inline-block max-w-full h-1.5 min-w-10 rounded-full cursor-default transition-all hover:h-5 hover:px-2 hover:leading-5 hover:text-[10px] hover:text-white hover:font-medium overflow-hidden text-ellipsis whitespace-nowrap group ${className}`}
+        className={`inline-flex items-center max-w-full h-5 min-w-10 rounded-full px-2 leading-5 text-[10px] text-white font-medium overflow-hidden text-ellipsis whitespace-nowrap ${className}`}
         style={{ background: color }}
         title={name}
         onClick={onClick}
       >
-        <span className="hidden group-hover:inline truncate">{name}</span>
+        {name}
       </span>
     );
   }
